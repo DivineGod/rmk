@@ -1,6 +1,8 @@
+use std::rc::Weak;
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use rmk_config::toml_config::SplitBoardConfig;
+use rmk_config::toml_config::{MatrixType, SplitBoardConfig};
 use syn::ItemMod;
 
 use crate::{
@@ -8,7 +10,7 @@ use crate::{
     feature::{get_rmk_features, is_feature_enabled},
     import::expand_imports,
     keyboard_config::{read_keyboard_toml_config, BoardConfig, KeyboardConfig},
-    matrix::expand_matrix_input_output_pins,
+    matrix::{expand_matrix_direct_pins, expand_matrix_input_output_pins},
     split::central::expand_serial_init,
     ChipModel, ChipSeries,
 };
@@ -91,12 +93,41 @@ fn expand_split_peripheral(
 
     let imports = expand_imports(&item_mod);
     let chip_init = expand_chip_init(keyboard_config, &item_mod);
-    let matrix_config = expand_matrix_input_output_pins(
-        &keyboard_config.chip,
-        peripheral_config.input_pins.clone(),
-        peripheral_config.output_pins.clone(),
-        async_matrix,
-    );
+    let mut matrix_config = proc_macro2::TokenStream::new();
+    match &peripheral_config.matrix.matrix_type {
+        MatrixType::normal => {
+            matrix_config.extend(expand_matrix_input_output_pins(
+                &keyboard_config.chip,
+                peripheral_config.matrix.input_pins.clone().unwrap(),
+                peripheral_config.matrix.output_pins.clone().unwrap(),
+                async_matrix,
+            ));
+        }
+        MatrixType::direct_pin => {
+            matrix_config.extend(expand_matrix_direct_pins(
+                &keyboard_config.chip,
+                peripheral_config.matrix.direct_pins.clone().unwrap(),
+                async_matrix,
+                peripheral_config.matrix.direct_pin_low_active,
+            ));
+            // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
+            // So we need to declaring them in advance.
+            /*
+            let rows = keyboard_config.layout.rows as usize;
+            let cols = keyboard_config.layout.cols as usize;
+            let size = keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
+            let layers = keyboard_config.layout.layers as usize;
+            let low_active = peripheral_config.matrix.direct_pin_low_active;
+            matrix_config.extend(quote! {
+                pub(crate) const ROW: usize = #rows;
+                pub(crate) const COL: usize = #cols;
+                pub(crate) const SIZE: usize = #size;
+                pub(crate) const LAYER_NUM: usize = #layers;
+                let low_active = #low_active;
+            });
+            */
+        }
+    }
 
     let run_rmk_peripheral =
         expand_split_peripheral_entry(&keyboard_config.chip, peripheral_config, &central_config);
