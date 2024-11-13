@@ -15,7 +15,7 @@ use crate::{
     ChipModel, ChipSeries,
 };
 
-/// Parse split central mod and generate a valid RMK main function with all needed code
+/// Parse split peripheral mod and generate a valid RMK main function with all needed code
 pub(crate) fn parse_split_peripheral_mod(
     id: usize,
     _attr: proc_macro::TokenStream,
@@ -112,7 +112,6 @@ fn expand_split_peripheral(
             ));
             // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
             // So we need to declaring them in advance.
-            /*
             let rows = keyboard_config.layout.rows as usize;
             let cols = keyboard_config.layout.cols as usize;
             let size = keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
@@ -125,7 +124,6 @@ fn expand_split_peripheral(
                 pub(crate) const LAYER_NUM: usize = #layers;
                 let low_active = #low_active;
             });
-            */
         }
     }
 
@@ -155,19 +153,38 @@ fn expand_split_peripheral_entry(
             let peripheral_addr = peripheral_config.ble_addr.expect(
                 "Peripheral should have a ble address, please check the `ble_addr` field in `keyboard.toml`",
             );
-            quote! {
-                ::rmk::split::peripheral::run_rmk_split_peripheral::<
-                    ::embassy_nrf::gpio::Input<'_>,
-                    ::embassy_nrf::gpio::Output<'_>,
-                    #row,
-                    #col
-                > (
-                    input_pins,
-                    output_pins,
-                    [#(#central_addr), *],
-                    [#(#peripheral_addr), *],
-                    spawner,
-                ).await
+            match peripheral_config.matrix.matrix_type {
+                MatrixType::direct_pin => {
+                    quote! {
+                        ::rmk::split::peripheral::run_rmk_split_peripheral_direct_pin::<
+                            ::embassy_nrf::gpio::Input<'_>,
+                            ::embassy_nrf::gpio::Output<'_>,
+                            #row,
+                            #col
+                        > (
+                            direct_pins,
+                            [#(#central_addr), *],
+                            [#(#peripheral_addr), *],
+                            spawner,
+                        ).await
+                    }
+                }
+                MatrixType::normal => {
+                    quote! {
+                        ::rmk::split::peripheral::run_rmk_split_peripheral::<
+                            ::embassy_nrf::gpio::Input<'_>,
+                            ::embassy_nrf::gpio::Output<'_>,
+                            #row,
+                            #col
+                        > (
+                            input_pins,
+                            output_pins,
+                            [#(#central_addr), *],
+                            [#(#peripheral_addr), *],
+                            spawner,
+                        ).await
+                    }
+                }
             }
         }
         ChipSeries::Rp2040 => {
@@ -182,14 +199,25 @@ fn expand_split_peripheral_entry(
 
             let row = peripheral_config.rows as usize;
             let col = peripheral_config.cols as usize;
-            let peripheral_run = quote! {
-                ::rmk::split::peripheral::run_rmk_split_peripheral::<
-                    ::embassy_rp::gpio::Input<'_>,
-                    ::embassy_rp::gpio::Output<'_>,
-                    _,
-                    #row,
-                    #col,
-                >(input_pins, output_pins, uart0).await;
+            let peripheral_run = match peripheral_config.matrix.matrix_type {
+                MatrixType::normal => quote! {
+                    ::rmk::split::peripheral::run_rmk_split_peripheral::<
+                        ::embassy_rp::gpio::Input<'_>,
+                        ::embassy_rp::gpio::Output<'_>,
+                        _,
+                        #row,
+                        #col,
+                    >(input_pins, output_pins, uart0).await;
+                },
+                MatrixType::direct_pin => quote! {
+                    ::rmk::split::peripheral::run_rmk_split_peripheral_direct_pin::<
+                        ::embassy_rp::gpio::Input<'_>,
+                        ::embassy_rp::gpio::Output<'_>,
+                        _,
+                        #row,
+                        #col,
+                    >(direct_pins, uart0).await;
+                },
             };
             quote! {
                 #serial_init
