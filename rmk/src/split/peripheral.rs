@@ -117,9 +117,9 @@ pub async fn run_rmk_split_peripheral_direct_pin<
 ) {
     // Create the debouncer, use COL2ROW by default
     #[cfg(all(feature = "col2row", feature = "rapid_debouncer"))]
-    let debouncer = RapidDebouncer::<ROW, COL>::new();
+    let debouncer = RapidDebouncer::<COL, ROW>::new();
     #[cfg(all(feature = "col2row", not(feature = "rapid_debouncer")))]
-    let debouncer = DefaultDebouncer::<ROW, COL>::new();
+    let debouncer = DefaultDebouncer::<COL, ROW>::new();
     #[cfg(all(not(feature = "col2row"), feature = "rapid_debouncer"))]
     let debouncer = RapidDebouncer::<COL, ROW>::new();
     #[cfg(all(not(feature = "col2row"), not(feature = "rapid_debouncer")))]
