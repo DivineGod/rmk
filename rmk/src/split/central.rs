@@ -210,19 +210,13 @@ pub async fn run_rmk_split_central_direct_pin<
     .await;
 
     #[cfg(not(any(feature = "_nrf_ble", feature = "_esp_ble")))]
-    let fut = initialize_usb_split_central_and_run::<
-        _,
-        _,
-        D,
-        F,
-        TOTAL_ROW,
-        TOTAL_COL,
-        CENTRAL_ROW,
-        CENTRAL_COL,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        NUM_LAYER,
-    >(matrix, usb_driver, flash, default_keymap, keyboard_config)
+    let fut = initialize_usb_split_central_and_run::<_, _, D, F, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
+        matrix,
+        usb_driver,
+        flash,
+        default_keymap,
+        keyboard_config,
+    )
     .await;
 
     fut
