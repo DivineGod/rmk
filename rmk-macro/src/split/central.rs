@@ -94,12 +94,11 @@ fn expand_split_central(
             ));
             // `generic_arg_infer` is a nightly feature. Const arguments cannot yet be inferred with `_` in stable now.
             // So we need to declaring them in advance.
-            /*
             let rows = keyboard_config.layout.rows as usize;
             let cols = keyboard_config.layout.cols as usize;
             let size = keyboard_config.layout.rows as usize * keyboard_config.layout.cols as usize;
             let layers = keyboard_config.layout.layers as usize;
-            let low_active = peripheral_config.matrix.direct_pin_low_active;
+            let low_active = split_config.central.matrix.direct_pin_low_active;
             matrix_config.extend(quote! {
                 pub(crate) const ROW: usize = #rows;
                 pub(crate) const COL: usize = #cols;
@@ -107,7 +106,6 @@ fn expand_split_central(
                 pub(crate) const LAYER_NUM: usize = #layers;
                 let low_active = #low_active;
             });
-            */
         }
     }
 
@@ -189,20 +187,39 @@ fn expand_split_central_entry(
             } else {
                 format_ident!("{}", "usb")
             };
-            let central_task = quote! {
-                ::rmk::split::central::run_rmk_split_central::<
-                    ::embassy_stm32::gpio::Input<'_>,
-                    ::embassy_stm32::gpio::Output<'_>,
-                    ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#usb_name>,
-                    ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
-                    ROW,
-                    COL,
-                    #central_row,
-                    #central_col,
-                    #central_row_offset,
-                    #central_col_offset,
-                    NUM_LAYER,
-                >(input_pins, output_pins, driver, flash, &mut get_default_keymap(), keyboard_config, spawner)
+            let low_active = split_config.central.matrix.direct_pin_low_active;
+            let central_task = match split_config.central.matrix.matrix_type {
+                MatrixType::normal => quote! {
+                    ::rmk::split::central::run_rmk_split_central::<
+                        ::embassy_stm32::gpio::Input<'_>,
+                        ::embassy_stm32::gpio::Output<'_>,
+                        ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#usb_name>,
+                        ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
+                        ROW,
+                        COL,
+                        #central_row,
+                        #central_col,
+                        #central_row_offset,
+                        #central_col_offset,
+                        NUM_LAYER,
+                    >(input_pins, output_pins, driver, flash, &mut get_default_keymap(), keyboard_config, , spawner)
+                },
+                MatrixType::direct_pin => quote! {
+                    ::rmk::split::central::run_rmk_split_central_direct_pin::<
+                        ::embassy_stm32::gpio::Input<'_>,
+                        ::embassy_stm32::gpio::Output<'_>,
+                        ::embassy_stm32::#usb_mod_path::Driver<'_, ::embassy_stm32::peripherals::#usb_name>,
+                        ::embassy_stm32::flash::Flash<'_, ::embassy_stm32::flash::Blocking>,
+                        ROW,
+                        COL,
+                        #central_row,
+                        #central_col,
+                        #central_row_offset,
+                        #central_col_offset,
+                        NUM_LAYER,
+                        SIZE,
+                    >(direct_pins, driver, flash, &mut get_default_keymap(), keyboard_config, #low_active, spawner)
+                },
             };
             let mut tasks = vec![central_task];
             let central_serials = split_config
@@ -236,19 +253,37 @@ fn expand_split_central_entry(
                 .central
                 .ble_addr
                 .expect("No ble_addr defined for central");
-            let central_task = quote! {
-                ::rmk::split::central::run_rmk_split_central::<
-                    ::embassy_nrf::gpio::Input<'_>,
-                    ::embassy_nrf::gpio::Output<'_>,
-                    ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::USBD, &::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect>,
-                    ROW,
-                    COL,
-                    #central_row,
-                    #central_col,
-                    #central_row_offset,
-                    #central_col_offset,
-                    NUM_LAYER,
-                >(input_pins, output_pins, driver, &mut get_default_keymap(), keyboard_config, [#(#central_addr), *], spawner)
+            let low_active = split_config.central.matrix.direct_pin_low_active;
+            let central_task = match split_config.central.matrix.matrix_type {
+                MatrixType::normal => quote! {
+                    ::rmk::split::central::run_rmk_split_central::<
+                        ::embassy_nrf::gpio::Input<'_>,
+                        ::embassy_nrf::gpio::Output<'_>,
+                        ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::USBD, &::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect>,
+                        ROW,
+                        COL,
+                        #central_row,
+                        #central_col,
+                        #central_row_offset,
+                        #central_col_offset,
+                        NUM_LAYER,
+                    >(input_pins, output_pins, driver, &mut get_default_keymap(), keyboard_config, [#(#central_addr), *], spawner)
+                },
+                MatrixType::direct_pin => quote! {
+                    ::rmk::split::central::run_rmk_split_central_direct_pin::<
+                        ::embassy_nrf::gpio::Input<'_>,
+                        ::embassy_nrf::gpio::Output<'_>,
+                        ::embassy_nrf::usb::Driver<'_, ::embassy_nrf::peripherals::USBD, &::embassy_nrf::usb::vbus_detect::SoftwareVbusDetect>,
+                        ROW,
+                        COL,
+                        #central_row,
+                        #central_col,
+                        #central_row_offset,
+                        #central_col_offset,
+                        NUM_LAYER,
+                        SIZE,
+                    >(direct_pins, driver, &mut get_default_keymap(), keyboard_config, #low_active, [#(#central_addr), *], spawner)
+                },
             };
             let mut tasks = vec![central_task];
             split_config.peripheral.iter().enumerate().for_each(|(idx, p)| {
@@ -267,7 +302,10 @@ fn expand_split_central_entry(
             join_all_tasks(tasks)
         }
         ChipSeries::Rp2040 => {
-            let central_task = quote! {
+            let low_active = split_config.central.matrix.direct_pin_low_active;
+
+            let central_task = match split_config.central.matrix.matrix_type {
+                MatrixType::normal => quote! {
                 ::rmk::split::central::run_rmk_split_central::<
                     ::embassy_rp::gpio::Input<'_>,
                     ::embassy_rp::gpio::Output<'_>,
@@ -281,6 +319,23 @@ fn expand_split_central_entry(
                     #central_col_offset,
                     NUM_LAYER,
                 >(input_pins, output_pins, driver, flash, &mut get_default_keymap(), keyboard_config, spawner)
+                },
+                MatrixType::direct_pin => quote! {
+                    ::rmk::split::central::run_rmk_split_central_direct_pin::<
+                        ::embassy_rp::gpio::Input<'_>,
+                        ::embassy_rp::gpio::Output<'_>,
+                        ::embassy_rp::usb::Driver<'_, ::embassy_rp::peripherals::USB>,
+                        ::embassy_rp::flash::Flash<::embassy_rp::peripherals::FLASH, ::embassy_rp::flash::Async, FLASH_SIZE>,
+                        ROW,
+                        COL,
+                        #central_row,
+                        #central_col,
+                        #central_row_offset,
+                        #central_col_offset,
+                        NUM_LAYER,
+                        SIZE,
+                    >(direct_pins, driver, flash, &mut get_default_keymap(), keyboard_config, #low_active, spawner)
+                },
             };
             let mut tasks = vec![central_task];
             let central_serials = split_config

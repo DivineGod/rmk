@@ -108,6 +108,7 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     const SIZE: usize,
 >(
     #[cfg(feature = "col2row")] direct_pins: [[Option<In>; COL]; ROW],
+    #[cfg(not(feature = "col2row"))] direct_pins: [[Option<In>; ROW]; COL],
     #[cfg(feature = "_nrf_ble")] central_addr: [u8; 6],
     #[cfg(feature = "_nrf_ble")] peripheral_addr: [u8; 6],
     low_active: bool,
@@ -125,7 +126,10 @@ pub async fn run_rmk_split_peripheral_direct_pin<
     let debouncer = DefaultDebouncer::<COL, ROW>::new();
 
     // Keyboard matrix
+    #[cfg(feature = "col2row")]
     let matrix = DirectPinMatrix::<_, _, ROW, COL, SIZE>::new(direct_pins, debouncer, low_active);
+    #[cfg(not(feature = "col2row"))]
+    let matrix = DirectPinMatrix::<_, _, COL, ROW, SIZE>::new(direct_pins, debouncer, low_active);
 
     #[cfg(not(feature = "_nrf_ble"))]
     initialize_serial_split_peripheral_and_run::<_, S, ROW, COL>(matrix, serial).await;

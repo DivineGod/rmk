@@ -150,9 +150,11 @@ fn expand_split_peripheral_entry(
                 .expect("Missing central ble address");
             let row = peripheral_config.rows;
             let col = peripheral_config.cols;
+            let size = row + col;
             let peripheral_addr = peripheral_config.ble_addr.expect(
                 "Peripheral should have a ble address, please check the `ble_addr` field in `keyboard.toml`",
             );
+            let low_active = peripheral_config.matrix.direct_pin_low_active;
             match peripheral_config.matrix.matrix_type {
                 MatrixType::direct_pin => {
                     quote! {
@@ -160,11 +162,13 @@ fn expand_split_peripheral_entry(
                             ::embassy_nrf::gpio::Input<'_>,
                             ::embassy_nrf::gpio::Output<'_>,
                             #row,
-                            #col
+                            #col,
+                            #size
                         > (
                             direct_pins,
                             [#(#central_addr), *],
                             [#(#peripheral_addr), *],
+                            #low_active,
                             spawner,
                         ).await
                     }
