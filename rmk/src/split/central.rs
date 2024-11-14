@@ -199,23 +199,12 @@ pub async fn run_rmk_split_central_direct_pin<
     >::new(direct_pins, debouncer, low_active);
 
     #[cfg(feature = "_nrf_ble")]
-    let fut = initialize_ble_split_central_and_run::<
-        _,
-        _,
-        D,
-        TOTAL_ROW,
-        TOTAL_COL,
-        CENTRAL_ROW,
-        CENTRAL_COL,
-        CENTRAL_ROW_OFFSET,
-        CENTRAL_COL_OFFSET,
-        NUM_LAYER,
-    >(
+    let fut = initialize_nrf_ble_keyboard_and_run::<_, _, D, TOTAL_ROW, TOTAL_COL, NUM_LAYER>(
         matrix,
         usb_driver,
         default_keymap,
         keyboard_config,
-        central_addr,
+        Some(central_addr),
         spawner,
     )
     .await;
